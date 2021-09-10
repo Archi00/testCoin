@@ -1,5 +1,5 @@
 import * as CryptoJS from "crypto-js";
-
+import { hexToBinary } from "./utils";
 
 const BLOCK_GENERATION_INTERVAL: number = 10;
 const DIFFICULTY_ADJUSTMENT_INTERVAL: number = 10;
@@ -74,7 +74,12 @@ const calculateHashForBlock = (_block: Block): string =>
         ,_block.nonce
     );
 
+const hashMatchesDifficulty = (_hash: string, _difficulty: number): boolean => {
+    const hashInBinary:   string = hexToBinary(_hash);
+    const requiredPrefix: string = '0'.repeat(_difficulty);
 
+    return hashInBinary.startsWith(requiredPrefix);
+}
 
 const findBlock = (
          _index:        number
@@ -96,13 +101,13 @@ const findBlock = (
             )
             if (hashMatchesDifficulty(hash, _difficulty)) {
                 return new Block(
-                             _index
-                            ,_previousHash
-                            ,_timestamp
-                            ,_data
-                            ,_difficulty
-                            ,nonce
-                )
+                                 _index
+                                ,_previousHash
+                                ,_timestamp
+                                ,_data
+                                ,_difficulty
+                                ,nonce
+                            )
             }
             nonce++;
         }
@@ -111,25 +116,22 @@ const getCurrentTimestamp = (): number => Math.round(new Date().getTime() / 1000
     
     const generateBlock = (_data: string): Block => {
     const lastBlock:    Block  = getLastBlock();
+    const difficulty:   number = getDifficulty(getBlockchain());
     const newIndex:     number = lastBlock.index + 1;
     const newTimestamp: number = getCurrentTimestamp()
-    const newHash:      string = calculateHash(
-                                    newIndex
-                                    ,lastBlock.hash
-                                    ,newTimestamp
-                                    ,_data
-                                );
-
-    const newBlock:     Block  = new Block(
-                                        newIndex
-                                        ,newHash
+    const newBlock:     Block  = findBlock(
+                                         newIndex
                                         ,lastBlock.hash
                                         ,newTimestamp
                                         ,_data
+                                        ,difficulty
                                     );
-
     return newBlock;
 };
+const isValidTimestamp = (_newBlock: Block, _previousBlock: Block): boolean => {
+    return (_previousBlock.timestamp - 60 < _newBlock.timestamp)
+        && (_newBlock.timestamp      - 60 < getCurrentTimestamp());
+}
 
 // Block is valid if: 
 const isValid = (_newBlock: Block, _lastBlock: Block): boolean => {
@@ -177,7 +179,6 @@ const isValidBlockchain = (_blockchain: Block[]): boolean => {
     return true;
 }
 
-
 const addBlockToChain = (_block: Block): boolean => {
     if (isValid(_block, getLastBlock())) {
         blockchain.push(_block);
@@ -196,16 +197,9 @@ const replaceChain = (_blockchain: Block[]) => {
     }
 }
 
-const hashMatchesDifficulty = (_hash: string, _difficulty: number): boolean => {
-    const hashInBinary:   string = hexToBinary(_hash);
-    const requiredPrefix: string = '0'.repeat(_difficulty);
-
-    return hashInBinary.startsWith(requiredPrefix);
-}
-
 const getDifficulty = (_blockchain: Block[]): number => {
     const latestBlock: Block = _blockchain[blockchain.length - 1];
-    if (latestBlock.index % DIFFICULTY_ADJUSTMENT_INTERVAL === 0 % latestBlock.index !== 0) {
+    if (latestBlock.index % DIFFICULTY_ADJUSTMENT_INTERVAL === 0 && latestBlock.index !== 0) {
         return getAdjustedDifficulty(latestBlock, _blockchain);
     } else {
         return latestBlock.difficulty;
